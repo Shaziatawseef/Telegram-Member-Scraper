@@ -108,8 +108,12 @@ async def main(update: Update):
     target_group = user_data['target_group']
     invite_link = user_data['invite_link']
 
+    # Ensure fresh session
+    if os.path.exists(session_name + '.session'):
+        os.remove(session_name + '.session')
+
     client = TelegramClient(session_name, api_id, api_hash)
-    await client.start()
+    await client.start()  # Telethon will now ask for phone, OTP, and 2FA if needed
     await update.message.reply_text(f'Logged in as: {await client.get_me()}')
 
     while True:
