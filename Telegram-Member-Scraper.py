@@ -11,6 +11,7 @@ BOT_TOKEN = '7713181989:AAGLUmTc_ZC_3hixTdrMiouCpokw0_L8-hk'
 
 # Global variables to store user inputs
 user_data = {}
+current_step = 'api_id'
 
 # Files
 sent_file = 'sent.txt'
@@ -49,34 +50,54 @@ async def try_invite(client, target_entity, user):
 
 # Bot Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global current_step
+    current_step = 'api_id'
     await update.message.reply_text(
-        "Welcome! Please send your API ID."
+        "Welcome! Please send your API ID (a number)."
     )
 
-async def receive_api_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_data['api_id'] = int(update.message.text)
-    await update.message.reply_text("API ID received. Now send your API Hash:")
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global current_step
+    text = update.message.text.strip()
 
-async def receive_api_hash(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_data['api_hash'] = update.message.text
-    await update.message.reply_text("API Hash received. Now send your session name:")
+    if current_step == 'api_id':
+        try:
+            user_data['api_id'] = int(text)
+            current_step = 'api_hash'
+            await update.message.reply_text("API ID received. Now send your API Hash (string):")
+        except ValueError:
+            await update.message.reply_text("Invalid API ID. Please send a number.")
+        return
 
-async def receive_session_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_data['session_name'] = update.message.text
-    await update.message.reply_text("Session name received. Now send your source group link:")
+    if current_step == 'api_hash':
+        user_data['api_hash'] = text
+        current_step = 'session_name'
+        await update.message.reply_text("API Hash received. Now send your session name:")
+        return
 
-async def receive_source_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_data['source_group'] = update.message.text
-    await update.message.reply_text("Source group received. Now send your target group link:")
+    if current_step == 'session_name':
+        user_data['session_name'] = text
+        current_step = 'source_group'
+        await update.message.reply_text("Session name received. Now send your source group link:")
+        return
 
-async def receive_target_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_data['target_group'] = update.message.text
-    await update.message.reply_text("Target group received. Now send your invite link:")
-    
-async def receive_invite_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_data['invite_link'] = update.message.text
-    await update.message.reply_text("Invite link received. Starting automation...")
-    asyncio.create_task(main(update))
+    if current_step == 'source_group':
+        user_data['source_group'] = text
+        current_step = 'target_group'
+        await update.message.reply_text("Source group received. Now send your target group link:")
+        return
+
+    if current_step == 'target_group':
+        user_data['target_group'] = text
+        current_step = 'invite_link'
+        await update.message.reply_text("Target group received. Now send your invite link:")
+        return
+
+    if current_step == 'invite_link':
+        user_data['invite_link'] = text
+        await update.message.reply_text("Invite link received. Starting automation...")
+        asyncio.create_task(main(update))
+        return
 
 # Main automation function
 async def main(update: Update):
@@ -123,8 +144,8 @@ async def main(update: Update):
                 continue
 
             try:
-                text = f"Hi {user.first_name or ''}! Join our group here: {invite_link}\nIf you'd rather not be messaged, sorry for the ping."
-                await client.send_message(user.id, text)
+                text_msg = f"Hi {user.first_name or ''}! Join our group here: {invite_link}\nIf you'd rather not be messaged, sorry for the ping."
+                await client.send_message(user.id, text_msg)
                 await update.message.reply_text(f"[MESSAGED] {uid}")
                 append_line(sent_file, uid)
                 await asyncio.sleep(random.uniform(min_delay, max_delay))
@@ -145,12 +166,7 @@ async def main(update: Update):
 # Telegram bot setup
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_api_id))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_api_hash))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_session_name))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_source_group))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_target_group))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_invite_link))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 if __name__ == "__main__":
     app.run_polling()
